@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """This script acquires the most recent AkWarm Energy Library and 
-converts it to a SQLite database, writing that database into the 'data'
+converts it to a SQLite database, writing that database into the 'data01'
 folder of this repository.  It also stores the name of the AkWarm Library
-in the 'cur-lib-name.txt' file in the 'data' folder.
+in the 'cur-lib-name.txt' file in the 'data01' folder.
 """
 # %%
 import sqlite3
@@ -16,12 +16,12 @@ import requests
 
 def download_library():
     """Downloads the current AkWarm Energy Library, stores the name of the library in 
-    data/cur-lib-name.txt, and then returns the library as a dictionary of tables.
+    data01/cur-lib-name.txt, and then returns the library as a dictionary of tables.
     """
     # Get name of current AkWarm Energy Library & save it in text file.
     resp = requests.get('https://analysisnorth.com/AkWarm/update_combined/Library_Info.txt')
     cur_lib_name = resp.text.splitlines()[-1].split('\t')[0]
-    open('data/cur-lib-name.txt', 'w').write(cur_lib_name)
+    open('data01/cur-lib-name.txt', 'w').write(cur_lib_name)
 
     # Download the library, decode and decompress it into an XML string.
     resp = requests.get(f'https://analysisnorth.com/AkWarm/update_combined/{cur_lib_name}')
@@ -61,10 +61,10 @@ lib = download_library()
 
 # %%
 # delete the old SQLite database, if present.
-Path('data/lib.db').unlink(missing_ok=True)
+Path('data01/lib.db').unlink(missing_ok=True)
 
 # Create a new SQLite database from the AkWarm Energy Library.
-conn = sqlite3.connect('data/lib.db')
+conn = sqlite3.connect('data01/lib.db')
 cur = conn.cursor()
 
 # Loop through the tables in the library
@@ -91,5 +91,5 @@ for tbl in lib.keys():
     values = [get_clean_vals(rec, flds) for rec in lib[tbl]]
     val_phrase = ','.join(['?'] * len(fields))
     cur.executemany(f"INSERT INTO {tbl} VALUES ({val_phrase})", values)
-    
+
     conn.commit()

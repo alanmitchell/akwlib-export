@@ -1,7 +1,7 @@
 *.lib
-data/*.csv
-data/*.db
-data/*.txt
+data01/*.csv
+data01/*.db
+data01/*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
