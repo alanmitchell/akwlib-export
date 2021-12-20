@@ -1,4 +1,3 @@
-*.lib
 data01/*.csv
 data01/*.db
 data01/*.txt
