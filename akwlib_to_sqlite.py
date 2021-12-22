@@ -66,30 +66,33 @@ Path('data01/lib.db').unlink(missing_ok=True)
 # Create a new SQLite database from the AkWarm Energy Library.
 conn = sqlite3.connect('data01/lib.db')
 cur = conn.cursor()
+try:
+    # Loop through the tables in the library
+    for tbl in lib.keys():
+        print(tbl)
+        if tbl.startswith('Pas'): continue
 
-# Loop through the tables in the library
-for tbl in lib.keys():
-    print(tbl)
-    if tbl.startswith('Pas'): continue
+        # Not all the fields may be present in the first record (weirdly).  Pull the
+        # field list from the record with the longest field list
+        flds = []       # complete list of fields for the table
+        for rec in lib[tbl]:
+            if len(rec.keys()) > len(flds):
+                flds = rec.keys()
 
-    # Not all the fields may be present in the first record (weirdly).  Pull the
-    # field list from the record with the longest field list
-    flds = []       # complete list of fields for the table
-    for rec in lib[tbl]:
-        if len(rec.keys()) > len(flds):
-            flds = rec.keys()
+        # When creating the tables in SQLite, make them all NUMERIC tables so that
+        # SQLite will attempt to convert values to Integers or Reals if possible.  If
+        # the field can't be converted, it will simply be stored as TEXT, as SQLite
+        # fields can store any Type (event if designated NUMERIC).
+        fields = [f"'{fld}' NUMERIC" for fld in flds]
+        field_phrase = ','.join(fields)
+        cur.execute(f"CREATE TABLE {tbl} ({field_phrase});")
 
-    # When creating the tables in SQLite, make them all NUMERIC tables so that
-    # SQLite will attempt to convert values to Integers or Reals if possible.  If
-    # the field can't be converted, it will simply be stored as TEXT, as SQLite
-    # fields can store any Type (event if designated NUMERIC).
-    fields = [f"'{fld}' NUMERIC" for fld in flds]
-    field_phrase = ','.join(fields)
-    cur.execute(f"CREATE TABLE {tbl} ({field_phrase});")
+        # Insert the records into the newly created table
+        values = [get_clean_vals(rec, flds) for rec in lib[tbl]]
+        val_phrase = ','.join(['?'] * len(fields))
+        cur.executemany(f"INSERT INTO {tbl} VALUES ({val_phrase})", values)
 
-    # Insert the records into the newly created table
-    values = [get_clean_vals(rec, flds) for rec in lib[tbl]]
-    val_phrase = ','.join(['?'] * len(fields))
-    cur.executemany(f"INSERT INTO {tbl} VALUES ({val_phrase})", values)
+        conn.commit()
 
-    conn.commit()
+finally:
+    conn.close()
