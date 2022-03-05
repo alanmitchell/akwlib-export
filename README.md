@@ -1,6 +1,4 @@
-# akwlib-to-csv
-Exports AkWarm Library data to CSV Files.
+# akwlib-export
+Exports AkWarm Library data to a SQLite database and a number of CSV and pickled Pandas DataFrame files.
 
-Downloads the most recent AkWarm Energy Library, converts it to a SQLite
-database and then creates a number of useful CSV files from the data.
 Data is stored in a data folder that can be made available on the Web.
