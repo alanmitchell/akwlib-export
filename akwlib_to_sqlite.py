@@ -61,16 +61,16 @@ lib = download_library()
 
 # %%
 # delete the old SQLite database, if present.
-Path('data01/lib.db').unlink(missing_ok=True)
+Path('data/v01/lib.db').unlink(missing_ok=True)
 
 # Create a new SQLite database from the AkWarm Energy Library.
-conn = sqlite3.connect('data01/lib.db')
+conn = sqlite3.connect('data/v01/lib.db')
 cur = conn.cursor()
 try:
     # Loop through the tables in the library
     for tbl in lib.keys():
         print(tbl)
-        if tbl.startswith('Pas'): continue
+        if tbl.startswith('Pa'): continue
 
         # Not all the fields may be present in the first record (weirdly).  Pull the
         # field list from the record with the longest field list

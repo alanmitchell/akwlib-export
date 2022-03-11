@@ -2,6 +2,7 @@
 # %%
 # Execute this cell prior to any of the cells below
 from ast import arg
+from multiprocessing import context
 import os
 from glob import glob
 from datetime import datetime
@@ -11,6 +12,8 @@ import io
 import math
 import argparse
 from pathlib import Path
+import sqlite3
+import contextlib
 
 import pandas as pd
 import numpy as np
@@ -18,9 +21,10 @@ from fuzzywuzzy import process, fuzz
 import util as au  # a utility library in this repo.
 #importlib.reload(au)    # needed if you modify the admin_util library
 
+# %%
 # set up commmand line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('-t', '--tmy', help='process TMY files', action="store_true")
+parser.add_argument('-t', '--tmy', help='process TMY files in addition to AkWarm data', action="store_true")
 
 args = parser.parse_args()
 # %%
@@ -50,10 +54,10 @@ if args.tmy:
     # eventually add to the metadata dataframe.
     df_design = pd.read_excel('data/tmy3-raw/design_temps.xlsx', index_col='tmy_id')
 
-    for fn in glob('data/tmy3-raw/*.csv'):
+    for f_path in Path('data/tmy3-raw').glob('*.csv'):
         
         # Use a csvreader just to process the header row
-        with open(fn) as csvfile:                    
+        with open(f_path) as csvfile:                    
             tmyreader = csv.reader(csvfile)
             hdr = next(tmyreader)
             meta = dict(
@@ -100,8 +104,7 @@ if args.tmy:
                 meta['heating_design_temp'] = df_final.db_temp.quantile(0.01)
             # print(meta['heating_design_temp'], df_final.db_temp.quantile(0.01))
 
-            base_file = os.path.basename(fn)
-            base_no_ext = base_file.split('.')[0]
+            base_no_ext = f_path.stem
             meta['url'] = f'v01/tmy3/{base_no_ext}'
 
             meta_list.append(meta)
@@ -119,18 +122,21 @@ if args.tmy:
 
 # %%
 # read in the DataFrame that describes the available TMY3 climate files.
-df_tmy_meta = pd.read_pickle('data/v01/tmy3/tmy3_meta.pkl', compression='bz2')
+df_tmy_meta = pd.read_pickle(base_path / 'tmy3/tmy3_meta.pkl', compression='bz2')
 
-# Read in the other City and Utility Excel files.
-df_city = pd.read_excel('data/city-util/raw/City.xlsx')
-df_city_util_link = pd.read_excel('data/city-util/raw/City Utility Links.xlsx')
+# Read in the other City and Utility Excel files from the SQLite database.
+with contextlib.closing(sqlite3.connect(base_path / 'lib.db')) as con:
+    with con as cur:
+        df_city = pd.read_sql_query('SELECT * FROM City', con)
+        df_city_util_link = pd.read_sql_query('SELECT * FROM CityUtilityLink', con)
 
-# Retrieve the Miscellaneous Information and store into a Pandas Series.
-misc_info = pd.read_excel('data/city-util/raw/Misc Info.xlsx').iloc[0]
+        # Retrieve the Miscellaneous Information and store into a Pandas Series.
+        misc_info = pd.read_sql_query('SELECT * FROM MiscellaneousInformation', con).iloc[0]
 
-df_util = pd.read_excel('data/city-util/raw/Utility.xlsx')
+        df_util = pd.read_sql_query('SELECT * FROM Utility', con)
+
 df_util.drop(['SiteSourceMultiplierOverride', 'BuybackRate', 'Notes'], axis=1, inplace=True)
-df_util.index = df_util.ID
+df_util.set_index('ID', inplace=True)
 df_util['NameShort'] = df_util['Name'].str[:6]
 
 # make a list of blocks with rates for each utility and save that as
@@ -139,7 +145,7 @@ blocks_col = []
 for ix, util in df_util.iterrows():
     adjust = au.chg_nonnum(util.FuelSurcharge, 0.0) + au.chg_nonnum(util.PurchasedEnergyAdj, 0.0)
     if util.ChargesRCC:
-        adjust += au.chg_nonnum(misc_info.RegSurchargeElectric, 0.0)
+        adjust += au.chg_nonnum(misc_info.RegulatorySurchargeElectric, 0.0)
     blocks = []
     for blk in range(1, 6):
         block_kwh = au.chg_nonnum(util['Block{}'.format(blk)], math.nan)
@@ -157,7 +163,7 @@ df_city = df_city.query('Active == 1')[[
     'Longitude',
     'ERHRegionID',
     'WAPRegionID',
-    'ImpCost',
+    'ImprovementCostLevel',
     'FuelRefer',
     'FuelCityID',
     'Oil1Price',
@@ -172,6 +178,8 @@ df_city = df_city.query('Active == 1')[[
     'BoroughSalesTax'
 ]]
 df_city.set_index('ID', inplace=True)
+
+# %%
 
 # Find the closest TMY3 site to each city.
 # Find the Electric Utilities associated with each city.
@@ -191,19 +199,19 @@ for ix, city_ser in df_city.iterrows():
     tmy_names.append(nm)
     
     # find electric utilities associated with city
-    util_list = df_city_util_link.query('CityID == @ix')['UtilityID']
+    util_list = df_city_util_link.query('CityId == @ix')['UtilityId']
     df_city_utils = df_util.loc[util_list]
     elec_utils = df_city_utils.query('Type==1 and Active==1').copy()
     elec_utils.sort_values(by=['NameShort', 'IsCommercial', 'ID'], inplace=True)
     if len(elec_utils) > 0:
-        utils.append(list(zip(elec_utils.Name, elec_utils.ID)))
+        utils.append(list(zip(elec_utils.Name, elec_utils.index)))
     else:
         # If there is no Electric Utility associated with this city,
         # assign the self-generation electric utility.
         utils.append([('Self Generation', SELF_GEN_ID)])
 
     # In AkWarm, there is only PCE data for the residential rate structures.
-    # We need to add it to the Commercial rate structures becuase community
+    # We need to add it to the Commercial rate structures because community
     # building may use those rates, and they potentially can get PCE.  So,
     # For each city, look at the utilities and find the PCE value.  Then
     # use that for the rate structures that are missing a PCE value.
@@ -225,14 +233,16 @@ for ix, city_ser in df_city.iterrows():
     # Use a residential gas utility, the smallest ID
     if len(gas_utils):
         gas_util = gas_utils.sort_values(by=['IsCommercial', 'ID']).iloc[0]
+        # determine if a Regulatory surcharge should be applied
+        reg_sur_mult = 1.0 + au.chg_nonnum(misc_info.RegulatorySurcharge, 0.0) if gas_util.ChargesRCC else 1.0
         # get the rate for a usage of 130 ccf
         for block in range(1, 6):
             block_val = gas_util['Block{}'.format(block)]
-            #set_trace()
             if math.isnan(block_val) or block_val >= 130:
                 gas_price = gas_util['Rate{}'.format(block)] + \
                             au.chg_nonnum(gas_util.FuelSurcharge, 0.0) + \
                             au.chg_nonnum(gas_util.PurchasedEnergyAdj, 0.0)
+                gas_price *= reg_sur_mult
                 break
 
     gas_prices.append(gas_price)
@@ -262,12 +272,11 @@ for ix, cty in df_city.query('FuelRefer > 0').iterrows():
             df_city.loc[ix, c] = cty_fuel[c]
             
 
-# %% [markdown]
+# %%
 # #### Link Cities to Census Areas and Other Geographic Areas
 # 
 # Also, determine typical monthly residential consumption for each city.
 
-# %%
 # read in the data linking ARIS cities to Census Areas
 df_city_to_census = pd.read_csv('other_data/aris_city_to_census_lookups.csv')
 
@@ -277,9 +286,6 @@ df_city_to_census['Hub'] = df_city_to_census.Hub.astype('bool')
 # rename some columns
 df_city_to_census.rename(columns={'Hub': 'hub', 'ARIS_cities': 'aris_city'}, inplace=True)
 
-df_city_to_census.head()
-
-# %%
 # For each city in the main City DataFrame, find the matching ARIS city (using
 # fuzzy matching) and add a column for that
 
@@ -294,7 +300,6 @@ for akw_cty in df_city.Name:
         matching_cities.append('')
 
 df_city['aris_city'] = matching_cities
-df_city[['Name', 'aris_city']].head()
 
 # %%
 # Merge in the Census & Geographic area data
@@ -302,7 +307,6 @@ print(len(df_city))
 # Need to do the merge this way in order to preserve the Left index
 df_city = df_city.join(df_city_to_census.set_index('aris_city'), how='left', on='aris_city')
 print(len(df_city))
-df_city.iloc[0]
 
 # %%
 # read in the data that links Hub cities and Census Areas non-hub cities to 
@@ -322,7 +326,6 @@ for ix, row in df_avg_use.iterrows():
     ann_avg.append(avg_use)
 df_avg_use['use_list'] = uses
 df_avg_use['annual_avg'] = ann_avg
-df_avg_use.head()
 
 # %%
 # Determine a monthly profile to be used by cities that are not covered.
@@ -330,13 +333,11 @@ df_avg_use.head()
 # Take the average of the Hub cities that have annual usages > 500 kWh/month
 df_hubs = df_avg_use.query('city != "non hub"').copy()
 df_lg_hubs = df_hubs.query('annual_avg > 500')
-df_lg_hubs
 
 # %%
 # Average those cities together to get the default usage value.
-means = df_lg_hubs.mean()
+means = df_lg_hubs.mean(numeric_only=True)
 default_use = [means[str(i)] for i in range(1, 13)]
-default_use
 
 # %%
 # Add the average use info as a list to the city DataFrame.
@@ -376,12 +377,14 @@ for ix, row in df_city.iterrows():
             mo_usages.append(default_use)
 df_city['avg_elec_usage'] = mo_usages
 
-# %% [markdown]
-# #### Save the DataFrames
+# %% 
+# Save the DataFrames
 
 # %%
 # Save the created DataFrames
-au.save_df(df_city, 'data/city-util/proc/city')
-au.save_df(df_util, 'data/city-util/proc/utility')
-au.save_df(misc_info, 'data/city-util/proc/misc_info')  # this routine works with Pandas Series as well
+au.save_df(df_city, 'data/v01/city')
+au.save_df(df_util, 'data/v01/utility')
+au.save_df(misc_info, 'data/v01/misc_info')  # this routine works with Pandas Series as well
 
+
+# %%

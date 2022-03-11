@@ -1,0 +1,10 @@
+,0
+ID,1
+IsTestObject,0
+LibraryVersion,2021-08-31T00:00:00
+DiscountRate,0.03
+RegulatorySurcharge,0.00137
+RegulatorySurchargeElectric,0.000884
+PCEkWhLimit,500
+PCEFundingPercent,1
+MiscellaneousNotes,Inflation factors and discount rate from 2011 FEMP;  Regulatory surcharge is now correctly modeled as a % for gas utilities and a $/kWh surcharge for electric utilities.  July 2021 RCC rates - fuel costs use price before taxes added as program now does the math   PCE 100% funding in effect Jan 2019.

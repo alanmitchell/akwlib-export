@@ -5,6 +5,8 @@ import math
 import numbers
 from glob import glob
 
+import numpy as np
+
 def clear_dir(dir_path):
     """Deletes all the files found in the 'dir_path' directory on the
     local machine, except for a file named '.gitignore'.  NOTE: glob
