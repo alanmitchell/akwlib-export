@@ -48,6 +48,8 @@ base_path = Path('data/v01')
 
 if args.tmy:
 
+    print('Processing TMY files...\n')
+
     meta_list = []
 
     # Read the Design Heating Temperature data into a DataFrame to 
@@ -121,6 +123,9 @@ if args.tmy:
 # Create City and Utility Dataframes 
 
 # %%
+
+print('Read in AkWarm Library data from the SQLite database...')
+
 # read in the DataFrame that describes the available TMY3 climate files.
 df_tmy_meta = pd.read_pickle(base_path / 'tmy3/tmy3_meta.pkl', compression='bz2')
 
@@ -139,6 +144,7 @@ df_util.drop(['SiteSourceMultiplierOverride', 'BuybackRate', 'Notes'], axis=1, i
 df_util.set_index('ID', inplace=True)
 df_util['NameShort'] = df_util['Name'].str[:6]
 
+print('Simplify Utility block rate data...')
 # make a list of blocks with rates for each utility and save that as
 # a column in the DataFrame.
 blocks_col = []
@@ -186,6 +192,7 @@ df_city.set_index('ID', inplace=True)
 # Determine a Natural Gas price for the city if there is 
 # a natural gas utility present.
 # Put all this information in the City DataFrame.
+print('Find closest TMY site...')
 tmy_ids = []
 tmy_names = []
 utils = []
@@ -276,6 +283,7 @@ for ix, cty in df_city.query('FuelRefer > 0').iterrows():
 # #### Link Cities to Census Areas and Other Geographic Areas
 # 
 # Also, determine typical monthly residential consumption for each city.
+print('Link AkWarm Cities to Census Areas and calculate Monthly Average Usage...')
 
 # read in the data linking ARIS cities to Census Areas
 df_city_to_census = pd.read_csv('other_data/aris_city_to_census_lookups.csv')
