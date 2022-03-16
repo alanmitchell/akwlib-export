@@ -62,10 +62,12 @@ def download_and_convert(output_dir):
 
     # path to final library SQLite file
     lib_path = Path(output_dir) / 'lib.db'
+    lib_bak_path = Path(str(lib_path) + '.bak')
 
-    # backup the old SQLite database, if present.
+    # backup the old SQLite database, if present and then delete
     if lib_path.exists():
-        shutil.copy(lib_path, lib_path / '.bak')
+        shutil.copy(lib_path, lib_bak_path)
+        lib_path.unlink()
 
     try:
         # Download the current library and return as a dictionary of tables.
@@ -103,12 +105,12 @@ def download_and_convert(output_dir):
             conn.commit()
 
     except Exception as e:
-        if (lib_path / '.bak').exists():
-            shutil.copy(lib_path / '.bak', lib_path)
+        if lib_bak_path.exists():
+            shutil.copy(lib_bak_path, lib_path)
         raise e
 
     finally:
-        (lib_path / '.bak').unlink(missing_ok=True)  # delete backup file
+        lib_bak_path.unlink(missing_ok=True)  # delete backup file
         try:
             conn.close()
         except:

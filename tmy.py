@@ -1,4 +1,5 @@
-
+"""Module to do processing of TMY3 files into Pandas dataframes and CSV files.
+"""
 from datetime import datetime
 import csv
 from pathlib import Path
