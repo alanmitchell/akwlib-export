@@ -4,24 +4,24 @@ converts it to a SQLite database, writing that database into the 'data01'
 folder of this repository.  It also stores the name of the AkWarm Library
 in the 'cur-lib-name.txt' file in the 'data01' folder.
 """
-# %%
+
 import sqlite3
 import gzip
+from tkinter import E
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from io import BytesIO
+import shutil
 import requests
 
-# %%
-
-def download_library():
+def download_library(output_dir):
     """Downloads the current AkWarm Energy Library, stores the name of the library in 
-    data01/cur-lib-name.txt, and then returns the library as a dictionary of tables.
+    'cur-lib-name.txt' in the 'output_dir' directory, and then returns the library as a 
+    dictionary of tables.
     """
     # Get name of current AkWarm Energy Library & save it in text file.
     resp = requests.get('https://analysisnorth.com/AkWarm/update_combined/Library_Info.txt')
     cur_lib_name = resp.text.splitlines()[-1].split('\t')[0]
-    open('data01/cur-lib-name.txt', 'w').write(cur_lib_name)
+    open(Path(output_dir) / 'cur-lib-name.txt', 'w').write(cur_lib_name)
 
     # Download the library, decode and decompress it into an XML string.
     resp = requests.get(f'https://analysisnorth.com/AkWarm/update_combined/{cur_lib_name}')
@@ -55,44 +55,61 @@ def get_clean_vals(rec, flds):
         final.append(v)
     return final
 
-# %%
-# Download the current library and return as a dictionary of tables.
-lib = download_library()
+def download_and_convert(output_dir):
+    """Downloads the current AkWarm Energy library, converts it to a SQLite database
+    and saves it as the file name 'lib.db' in the diretory 'output_dir'
+    """
 
-# %%
-# delete the old SQLite database, if present.
-Path('data/v01/lib.db').unlink(missing_ok=True)
+    # path to final library SQLite file
+    lib_path = Path(output_dir) / 'lib.db'
 
-# Create a new SQLite database from the AkWarm Energy Library.
-conn = sqlite3.connect('data/v01/lib.db')
-cur = conn.cursor()
-try:
-    # Loop through the tables in the library
-    for tbl in lib.keys():
-        print(tbl)
-        if tbl.startswith('Pa'): continue
+    # backup the old SQLite database, if present.
+    if lib_path.exists():
+        shutil.copy(lib_path, lib_path / '.bak')
 
-        # Not all the fields may be present in the first record (weirdly).  Pull the
-        # field list from the record with the longest field list
-        flds = []       # complete list of fields for the table
-        for rec in lib[tbl]:
-            if len(rec.keys()) > len(flds):
-                flds = rec.keys()
+    try:
+        # Download the current library and return as a dictionary of tables.
+        lib = download_library(output_dir)
 
-        # When creating the tables in SQLite, make them all NUMERIC tables so that
-        # SQLite will attempt to convert values to Integers or Reals if possible.  If
-        # the field can't be converted, it will simply be stored as TEXT, as SQLite
-        # fields can store any Type (event if designated NUMERIC).
-        fields = [f"'{fld}' NUMERIC" for fld in flds]
-        field_phrase = ','.join(fields)
-        cur.execute(f"CREATE TABLE {tbl} ({field_phrase});")
+        # Create a new SQLite database from the AkWarm Energy Library.
+        conn = sqlite3.connect(lib_path)
+        cur = conn.cursor()
 
-        # Insert the records into the newly created table
-        values = [get_clean_vals(rec, flds) for rec in lib[tbl]]
-        val_phrase = ','.join(['?'] * len(fields))
-        cur.executemany(f"INSERT INTO {tbl} VALUES ({val_phrase})", values)
+        # Loop through the tables in the library
+        for tbl in lib.keys():
+            print(tbl)
+            if tbl.startswith('Pa'): continue
 
-        conn.commit()
+            # Not all the fields may be present in the first record (weirdly).  Pull the
+            # field list from the record with the longest field list
+            flds = []       # complete list of fields for the table
+            for rec in lib[tbl]:
+                if len(rec.keys()) > len(flds):
+                    flds = rec.keys()
 
-finally:
-    conn.close()
+            # When creating the tables in SQLite, make them all NUMERIC tables so that
+            # SQLite will attempt to convert values to Integers or Reals if possible.  If
+            # the field can't be converted, it will simply be stored as TEXT, as SQLite
+            # fields can store any Type (event if designated NUMERIC).
+            fields = [f"'{fld}' NUMERIC" for fld in flds]
+            field_phrase = ','.join(fields)
+            cur.execute(f"CREATE TABLE {tbl} ({field_phrase});")
+
+            # Insert the records into the newly created table
+            values = [get_clean_vals(rec, flds) for rec in lib[tbl]]
+            val_phrase = ','.join(['?'] * len(fields))
+            cur.executemany(f"INSERT INTO {tbl} VALUES ({val_phrase})", values)
+
+            conn.commit()
+
+    except Exception as e:
+        if (lib_path / '.bak').exists():
+            shutil.copy(lib_path / '.bak', lib_path)
+        raise e
+
+    finally:
+        (lib_path / '.bak').unlink(missing_ok=True)  # delete backup file
+        try:
+            conn.close()
+        except:
+            pass
