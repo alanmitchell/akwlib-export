@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
-# %%
+
 # Execute this cell prior to any of the cells below
-from ast import arg
-from multiprocessing import context
-import os
-from glob import glob
 from datetime import datetime
-import importlib
 import csv
-import io
 import math
 import argparse
 from pathlib import Path
@@ -16,18 +10,17 @@ import sqlite3
 import contextlib
 
 import pandas as pd
-import numpy as np
 from fuzzywuzzy import process, fuzz
-import util as au  # a utility library in this repo.
-#importlib.reload(au)    # needed if you modify the admin_util library
 
-# %%
+import util as au  # a utility library in this repo.
+from tmy import process_tmy 
+
 # set up commmand line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-t', '--tmy', help='process TMY files in addition to AkWarm data', action="store_true")
 
 args = parser.parse_args()
-# %%
+
 # Some functions needed for processing
 
 def closest_tmy(city_ser, dft):
@@ -43,86 +36,14 @@ def closest_tmy(city_ser, dft):
 
 # base file path for processed files
 base_path = Path('data/v01')
-# %%
+
 # Process TMY3 Files, if requested
 
 if args.tmy:
+    process_tmy('data/tmy3-raw', 'data/v01/tmy3')
 
-    print('Processing TMY files...\n')
-
-    meta_list = []
-
-    # Read the Design Heating Temperature data into a DataFrame to 
-    # eventually add to the metadata dataframe.
-    df_design = pd.read_excel('data/tmy3-raw/design_temps.xlsx', index_col='tmy_id')
-
-    for f_path in Path('data/tmy3-raw').glob('*.csv'):
-        
-        # Use a csvreader just to process the header row
-        with open(f_path) as csvfile:                    
-            tmyreader = csv.reader(csvfile)
-            hdr = next(tmyreader)
-            meta = dict(
-                tmy_id = int(hdr[0]),
-                city = hdr[1].strip(),
-                state = hdr[2].strip(),
-                utc_offset = float(hdr[3]),
-                latitude = float(hdr[4]),
-                longitude = float(hdr[5]),
-                elevation = float(hdr[6]) * 3.28084   # in feet
-            )
-
-            # read the rest of the lines into a DataFrame
-            df = pd.read_csv(csvfile)
-
-            # start making final DataFrame
-            df['db_temp'] = df['Dry-bulb (C)'] * 1.8 + 32.0   # deg F
-            df['rh'] = df['RHum (%)']                         # 0 - 100
-            df['wind_spd'] = df['Wspd (m/s)'] * 2.23694     # miles per hour
-            df_final = df[['db_temp', 'rh', 'wind_spd']].copy()
-
-            # make a list of date/times with the stamp occurring in the
-            # middle of the hour associated with the data.  Also, use 
-            # the year 2018 for all the timestamps
-            ts = []
-            for dt, tm in zip(df['Date (MM/DD/YYYY)'], df['Time (HH:MM)']):
-                m, d, _ = dt.split('/')
-                h, _ = tm.split(':')
-                ts.append( datetime(2018, int(m), int(d), int(h) - 1, 30))
-
-            df_final.index = ts
-            df_final.index.name = 'timestamp'
-            df_final['month'] = df_final.index.month
-
-            meta['db_temp_avg'] = df_final.db_temp.mean()
-            meta['rh_avg'] = df_final.rh.mean()
-            meta['wind_spd_avg'] = df_final.wind_spd.mean()
-            
-            # If available, add the Design Heating Temperature to the metadata;
-            # If not available, calculate it from the 1% temperature value
-            try:
-                meta['heating_design_temp'] = df_design.loc[meta['tmy_id']].htg_design_temp
-            except:
-                meta['heating_design_temp'] = df_final.db_temp.quantile(0.01)
-            # print(meta['heating_design_temp'], df_final.db_temp.quantile(0.01))
-
-            base_no_ext = f_path.stem
-            meta['url'] = f'v01/tmy3/{base_no_ext}'
-
-            meta_list.append(meta)
-
-            # --- Store the site's DataFrame
-            au.save_df(df_final, base_path / f'tmy3/{base_no_ext}')
-
-    df_meta = pd.DataFrame(meta_list)
-    df_meta.set_index('tmy_id', inplace=True)
-    au.save_df(df_meta, base_path / f'tmy3/tmy3_meta')
-
-#import sys; sys.exit()
 # -------------------------------------------------------------------
 # Create City and Utility Dataframes 
-
-# %%
 
 print('Read in AkWarm Library data from the SQLite database...')
 
@@ -184,8 +105,6 @@ df_city = df_city.query('Active == 1')[[
     'BoroughSalesTax'
 ]]
 df_city.set_index('ID', inplace=True)
-
-# %%
 
 # Find the closest TMY3 site to each city.
 # Find the Electric Utilities associated with each city.
@@ -278,9 +197,7 @@ for ix, cty in df_city.query('FuelRefer > 0').iterrows():
         if c.endswith('Price'):
             df_city.loc[ix, c] = cty_fuel[c]
             
-
-# %%
-# #### Link Cities to Census Areas and Other Geographic Areas
+# Link Cities to Census Areas and Other Geographic Areas
 # 
 # Also, determine typical monthly residential consumption for each city.
 print('Link AkWarm Cities to Census Areas and calculate Monthly Average Usage...')
@@ -309,14 +226,12 @@ for akw_cty in df_city.Name:
 
 df_city['aris_city'] = matching_cities
 
-# %%
 # Merge in the Census & Geographic area data
 print(len(df_city))
 # Need to do the merge this way in order to preserve the Left index
 df_city = df_city.join(df_city_to_census.set_index('aris_city'), how='left', on='aris_city')
 print(len(df_city))
 
-# %%
 # read in the data that links Hub cities and Census Areas non-hub cities to 
 # average residential use per month.
 df_avg_use = pd.read_csv('other_data/monthly_average_kwh_per_res_customer_by_census_area_and_hub.csv')
@@ -335,19 +250,16 @@ for ix, row in df_avg_use.iterrows():
 df_avg_use['use_list'] = uses
 df_avg_use['annual_avg'] = ann_avg
 
-# %%
 # Determine a monthly profile to be used by cities that are not covered.
 # Because the above data came from PCE, non-covered cities are primarily Urban.
 # Take the average of the Hub cities that have annual usages > 500 kWh/month
 df_hubs = df_avg_use.query('city != "non hub"').copy()
 df_lg_hubs = df_hubs.query('annual_avg > 500')
 
-# %%
 # Average those cities together to get the default usage value.
 means = df_lg_hubs.mean(numeric_only=True)
 default_use = [means[str(i)] for i in range(1, 13)]
 
-# %%
 # Add the average use info as a list to the city DataFrame.
 
 # get the list of hub cities that have average usage data
@@ -385,14 +297,7 @@ for ix, row in df_city.iterrows():
             mo_usages.append(default_use)
 df_city['avg_elec_usage'] = mo_usages
 
-# %% 
-# Save the DataFrames
-
-# %%
 # Save the created DataFrames
 au.save_df(df_city, 'data/v01/city')
 au.save_df(df_util, 'data/v01/utility')
 au.save_df(misc_info, 'data/v01/misc_info')  # this routine works with Pandas Series as well
-
-
-# %%
