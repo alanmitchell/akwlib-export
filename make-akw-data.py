@@ -4,6 +4,8 @@
 
 import argparse
 from pathlib import Path
+from re import sub
+import subprocess
 
 # libraries in this project
 import akwlib_to_sqlite
@@ -28,3 +30,10 @@ akwlib_to_sqlite.download_and_convert(out_path)
 
 # --- Create City and Utility Dataframes 
 city.process_city_data(out_path)
+
+# Commit any changed files to the GitHub repo.  No commits or pushes occur if none
+# of the files have changed.
+subprocess.run('git add .', shell=True, check=False)   # stage any changed files
+lib_name = open('data/v01/cur-lib-name.txt').read()
+subprocess.run(f'git commit -m "Files from {lib_name} AkWarm library."', shell=True, check=False)
+subprocess.run('git push', shell=True, check=False)
