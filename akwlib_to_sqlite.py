@@ -7,7 +7,6 @@ in the 'cur-lib-name.txt' file in the 'data01' folder.
 
 import sqlite3
 import gzip
-from tkinter import E
 import xml.etree.ElementTree as ET
 from pathlib import Path
 import shutil
