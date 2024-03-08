@@ -104,7 +104,12 @@ def process_city_data(output_dir):
     for ix, city_ser in df_city.iterrows():
         
         # get closest TMY3 site
-        id, nm = closest_tmy(city_ser, df_tmy_meta)    
+        try:
+            id, nm = closest_tmy(city_ser, df_tmy_meta)    
+        except:
+            # probably no lat/long. Leave TMY as unidentified
+            id = 0
+            nm = ''
         tmy_ids.append(id)
         tmy_names.append(nm)
         

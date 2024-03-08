@@ -1,12 +1,12 @@
 ,0
 ID,1
 IsTestObject,0
-LibraryVersion,2023-09-15T00:00:00
-DiscountRate,0.03
+LibraryVersion,2024-03-01T00:00:00
+DiscountRate,0.02
 RegulatorySurcharge,0.00327
 RegulatorySurchargeElectric,0.001028
 PCEkWhLimit,750
 PCEFundingPercent,1
 CO2CostBaseYear,2022
 FuelEscalationBaseYear,2023
-MiscellaneousNotes,Regulatory surcharge is now correctly modeled as a % for gas utilities and a $/kWh surcharge for electric utilities. July 2023 RCC rates - fuel costs use price before taxes added as program now does the math   PCE 100% funding in effect Jan 2019. PCE kWH limited raised to 750 from 500 kWH July 2022.
+MiscellaneousNotes,Regulatory surcharge is now correctly modeled as a % for gas utilities and a $/kWh surcharge for electric utilities. Jan 2024 RCC rates - fuel costs use price before taxes added as program now does the math   PCE 100% funding in effect Jan 2019. PCE kWH limited raised to 750 from 500 kWH July 2022.

@@ -1,6 +1,5 @@
 fuzzywuzzy==0.18.0
 pandas==1.4.1
-numpy==1.22.3
 openpyxl==3.0.9
 requests==2.27.1
 python-Levenshtein==0.12.2
