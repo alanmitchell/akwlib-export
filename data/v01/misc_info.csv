@@ -1,10 +1,10 @@
 ,0
 ID,1
 IsTestObject,0
-LibraryVersion,2024-03-01T00:00:00
+LibraryVersion,2024-08-15T00:00:00
 DiscountRate,0.02
-RegulatorySurcharge,0.00327
-RegulatorySurchargeElectric,0.001028
+RegulatorySurcharge,0.00216
+RegulatorySurchargeElectric,0.001107
 PCEkWhLimit,750
 PCEFundingPercent,1
 CO2CostBaseYear,2022
