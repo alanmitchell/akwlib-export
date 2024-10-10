@@ -4,7 +4,6 @@
 
 import argparse
 from pathlib import Path
-from re import sub
 import subprocess
 
 # libraries in this project

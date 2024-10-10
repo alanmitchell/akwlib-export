@@ -67,7 +67,8 @@ def process_city_data(output_dir):
         blocks_col.append(blocks)
     df_util['Blocks'] = blocks_col
 
-    df_city = df_city.query('Active == 1')[[
+    # Don't include inactive cities or those with a Lat/Long.
+    df_city = df_city.dropna(subset=['Latitude']).query('Active == 1')[[
         'ID',
         'Name',
         'Latitude',
