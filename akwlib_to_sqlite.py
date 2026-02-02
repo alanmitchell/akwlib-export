@@ -12,18 +12,20 @@ from pathlib import Path
 import shutil
 import requests
 
+LIBRARY_FOLDER_URL = 'https://analysisnorth.com/AkWarm/update_combined/'
+
 def download_library(output_dir):
     """Downloads the current AkWarm Energy Library, stores the name of the library in 
     'cur-lib-name.txt' in the 'output_dir' directory, and then returns the library as a 
     dictionary of tables.
     """
     # Get name of current AkWarm Energy Library & save it in text file.
-    resp = requests.get('https://analysisnorth.com/AkWarm/update_combined/Library_Info.txt')
-    cur_lib_name = resp.text.splitlines()[-1].split('\t')[0]
+    resp = requests.get(f'{LIBRARY_FOLDER_URL}Library_Info.txt')
+    cur_lib_name = resp.text.splitlines()[-1].split('\t')[0].strip()
     open(Path(output_dir) / 'cur-lib-name.txt', 'w').write(cur_lib_name)
 
     # Download the library, decode and decompress it into an XML string.
-    resp = requests.get(f'https://analysisnorth.com/AkWarm/update_combined/{cur_lib_name}')
+    resp = requests.get(f'{LIBRARY_FOLDER_URL}{cur_lib_name}')
     binaryContent = resp.content
     unencryptedContent = bytearray(x ^ 30 for x in binaryContent)
     uncompressedContent = gzip.decompress(unencryptedContent)
