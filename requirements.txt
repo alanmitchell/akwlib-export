@@ -1,5 +1,0 @@
-fuzzywuzzy
-pandas
-openpyxl
-requests
-python-Levenshtein

@@ -12,7 +12,7 @@ from pathlib import Path
 import shutil
 import requests
 
-LIBRARY_FOLDER_URL = 'https://analysisnorth.com/AkWarm/update_combined/'
+LIBRARY_FOLDER_URL = ' https://akwarm.app/energy_libraries/'
 
 def download_library(output_dir):
     """Downloads the current AkWarm Energy Library, stores the name of the library in 
